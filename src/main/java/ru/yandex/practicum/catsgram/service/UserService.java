@@ -1,7 +1,6 @@
 package ru.yandex.practicum.catsgram.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestBody;
 import ru.yandex.practicum.catsgram.exception.ConditionsNotMetException;
 import ru.yandex.practicum.catsgram.exception.DuplicatedDataException;
 import ru.yandex.practicum.catsgram.exception.NotFoundException;
@@ -22,72 +21,53 @@ public class UserService {
         return users.values();
     }
 
-    public User create(@RequestBody final User user) {
-
-        if(user.getEmail() == null || user.getEmail().isEmpty()) {
-            throw new ConditionsNotMetException("Email is required");
+    public User create(User user) {
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new ConditionsNotMetException("Имейл должен быть указан");
         }
-
-        users.values().stream()
-                .filter(u -> u.getEmail().equals(user.getEmail()))
-                .findFirst()
-                .ifPresent(u -> {
-                    throw new DuplicatedDataException("Email is already in use");
-                });
-
+        if (users.containsValue(user)) {
+            throw new DuplicatedDataException("Данный имейл уже используется");
+        }
         user.setId(getNextId());
         user.setRegistrationDate(Instant.now());
-
         users.put(user.getId(), user);
         return user;
     }
 
-    public User update(@RequestBody User newUser) {
-        // Проверка ID
-        if(newUser.getId() == null) {
-            throw new ConditionsNotMetException("Id is required");
+    public User update(User newUser) {
+        if (newUser.getId() == null) {
+            throw new ConditionsNotMetException("Id должен быть указан");
         }
+        if (users.containsKey(newUser.getId())) {
+            User oldUser = users.get(newUser.getId());
+            if (newUser.getEmail() != null &&
+                !oldUser.getEmail().equalsIgnoreCase(newUser.getEmail())) {
+                if (users.containsValue(newUser)) {
+                    throw new DuplicatedDataException("Данный имейл уже используется");
+                }
+                oldUser.setEmail(newUser.getEmail());
+            }
+            if (newUser.getUsername() != null && !newUser.getUsername().isBlank()) {
+                oldUser.setUsername(newUser.getUsername());
+            }
+            if (newUser.getPassword() != null && !newUser.getPassword().isBlank()) {
+                oldUser.setPassword(newUser.getPassword());
+            }
+            return oldUser;
+        }
+        throw new NotFoundException("Пользователь с id = " + newUser.getId() + " не найден");
+    }
 
-        User oldUser = users.get(newUser.getId());
-        if(oldUser == null) {
-            throw new NotFoundException("Пользователь с id = " + newUser.getId() + " не найден");
-        }
-
-        // Проверка нового email на дубликат
-        if (newUser.getEmail() != null && !newUser.getEmail().equals(oldUser.getEmail())) {
-            users.values().stream()
-                    .filter(u -> u.getEmail().equals(newUser.getEmail()))
-                    .findFirst()
-                    .ifPresent(u -> {
-                        throw new DuplicatedDataException("Email is already in use");
-                    });
-        }
-
-        // Обновляем только не-null поля
-        if (newUser.getEmail() != null) {
-            oldUser.setEmail(newUser.getEmail());
-        }
-        if (newUser.getUsername() != null) {
-            oldUser.setUsername(newUser.getUsername());
-        }
-        if (newUser.getPassword() != null) {
-            oldUser.setPassword(newUser.getPassword());
-        }
-        return oldUser;
+    public Optional<User> findById(long authorId) {
+        return Optional.ofNullable(users.get(authorId));
     }
 
     private long getNextId() {
         long currentMaxId = users.keySet()
-                .stream()
-                .mapToLong(id -> id)
-                .max()
-                .orElse(0);
+            .stream()
+            .mapToLong(id -> id)
+            .max()
+            .orElse(0);
         return ++currentMaxId;
-    }
-
-    public Optional<User> findUserById(String userId) {
-        return users.values().stream()
-                .filter(user -> user.getId().equals(userId))
-                .findFirst();
     }
 }
